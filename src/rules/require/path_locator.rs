@@ -35,43 +35,42 @@ impl<'a, 'b, 'c> RequirePathLocator<'a, 'b, 'c> {
             source.display()
         );
 
-        if let Some(stripped) = path.strip_prefix("@self").ok().and_then(|p| p.strip_prefix("/")) {
-            let mut new_path = source.to_path_buf();
-            new_path.pop();
-            new_path.push(stripped);
-            path = new_path;
+        if let Ok(stripped_self) = path.strip_prefix("@self") {
+            if let Ok(stripped) = stripped_self.strip_prefix("/") {
+                let mut new_path = source.to_path_buf();
+                new_path.pop();
+                new_path.push(stripped);
+                path = new_path;
+            }
         } else if is_require_relative(&path) {
             let mut new_path = source.to_path_buf();
             new_path.pop();
             new_path.push(path);
             path = new_path;
         } else if !path.is_absolute() {
-            {
-                let mut components = path.components();
-                let root = components.next().ok_or_else(|| {
-                    DarkluaError::invalid_resource_path(path.display().to_string(), "path is empty")
-                })?;
-                let source_name = utils::convert_os_string(root.as_os_str()).map_err(|err| {
-                    err.context(format!(
-                        "cannot convert source name to utf-8 in `{}`",
-                        path.display(),
-                    ))
-                })?;
+            let mut components = path.components();
+            let root = components.next().ok_or_else(|| {
+                DarkluaError::invalid_resource_path(path.display().to_string(), "path is empty")
+            })?;
+            let source_name = utils::convert_os_string(root.as_os_str()).map_err(|err| {
+                err.context(format!(
+                    "cannot convert source name to utf-8 in `{}`",
+                    path.display(),
+                ))
+            })?;
 
-                let mut extra_module_location = self
-                    .path_require_mode
-                    .get_source(source_name, self.extra_module_relative_location)
-                    .ok_or_else(|| {
-                        DarkluaError::invalid_resource_path(
-                            path.display().to_string(),
-                            format!("unknown source name `{}`", source_name),
-                        )
-                    })?;
-                extra_module_location.extend(components);
-                path = extra_module_location;
-            }
+            let mut extra_module_location = self
+                .path_require_mode
+                .get_source(source_name, self.extra_module_relative_location)
+                .ok_or_else(|| {
+                    DarkluaError::invalid_resource_path(
+                        path.display().to_string(),
+                        format!("unknown source name `{}`", source_name),
+                    )
+                })?;
+            extra_module_location.extend(components);
+            path = extra_module_location;
         }
-        // else: the path is absolute so darklua should attempt to require it directly
 
         let normalized_path = utils::normalize_path_with_current_dir(&path);
         for potential_path in path_iterator::find_require_paths(
@@ -98,8 +97,6 @@ impl<'a, 'b, 'c> RequirePathLocator<'a, 'b, 'c> {
     }
 }
 
-// the `is_relative` method from std::path::Path is not what darklua needs
-// to consider a require relative, which are paths that starts with `.` or `..`
 fn is_require_relative(path: &Path) -> bool {
     path.starts_with(Path::new(".")) || path.starts_with(Path::new(".."))
 }
