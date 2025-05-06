@@ -35,7 +35,12 @@ impl<'a, 'b, 'c> RequirePathLocator<'a, 'b, 'c> {
             source.display()
         );
 
-        if is_require_relative(&path) {
+        if let Some(stripped) = path.strip_prefix("@self").ok().and_then(|p| p.strip_prefix("/")) {
+            let mut new_path = source.to_path_buf();
+            new_path.pop();
+            new_path.push(stripped);
+            path = new_path;
+        } else if is_require_relative(&path) {
             let mut new_path = source.to_path_buf();
             new_path.pop();
             new_path.push(path);
